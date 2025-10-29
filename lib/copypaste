@@ -1,0 +1,498 @@
+ OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 15,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          medition = finalBpm.toString();
+                          finalBpm = null;
+                          bpmValues.clear();
+                          data.clear();
+
+                        });
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.arrow_outward_rounded,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            "Ver métricas",
+                            style: TextStyle(
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+
+                    import 'package:flutter/material.dart';
+                    import 'package:flutter/services.dart';
+                    import 'package:miocardio_app/repos/cardio_repository.dart';
+                    import 'package:miocardio_app/telas/instrucoes_tela.dart';
+                    import 'package:percent_indicator/percent_indicator.dart';
+                    import 'package:miocardio_app/packages/heart_bpm.dart';
+                    import 'package:provider/provider.dart';
+
+
+                    class CardioTela extends StatefulWidget {
+                      const CardioTela({super.key});
+
+                      @override
+                      State<CardioTela> createState() => _CardioTelaState();
+                    }
+
+                    class _CardioTelaState extends State<CardioTela> {
+
+                      List<SensorValue> data = []; // List to store raw sensor values
+                      int? bpmValue; // Current BPM value
+                      int? finalBpm; // Final averaged BPM value
+                      bool isMeasuring = false; // Flag to indicate if measurement is ongoing
+                      // int secondsLeft = 60; // Seconds left for measurement
+                      List<int> bpmValues = []; // List to store BPM values during measurement
+                      bool useGreenChannel = true; // Flag to control green channel usage
+                      List<int> recentBpmValues =
+                      []; // List to store recent BPM values for smoothing
+                      bool fingerDetected = false; // Flag to indicate if finger is detected
+                      double percent = 0.0; // Percent indicator value
+                      String fingerState = 'Dedo não detectado';
+                      String medition = '80';
+                      bool control = false;
+
+                      void startMeasurement() {
+                        // Start measurement method
+                        setState(() {
+                          isMeasuring = true; // Set measuring flag
+                          fingerDetected = false; // reseta dedo detectado
+                          bpmValues.clear(); // Clear previous BPM values
+                          finalBpm = null; // Reset final BPM
+                          data.clear(); // Clear previous sensor data
+                          bpmValue = null; // Reset current BPM
+                          percent = 0.0; // Reset percent indicator
+                          recentBpmValues.clear(); // Clear recent BPM values
+                        });
+                      }
+
+                      void stopMeasurement() {
+                        // Stop measurement method
+                        setState(() {
+                          isMeasuring = false; // Stop measuring
+                          // secondsLeft = 60; // Reset timer
+                          finalBpm = null;
+
+                        });
+                      }
+
+                      updateAfericoes() async{
+                        final form = GlobalKey<FormState>();
+                        final bpm = TextEditingController();
+                        final afericoes = context.read<cardioRepository>();
+                        //print(afericoes.afericoes.length);
+
+                        AlertDialog dialog = AlertDialog(
+                          backgroundColor: Color(0xff161616),
+                          title: Text('Inserir aferição'),
+                          content: Form(
+                            key: form,
+                            child: TextFormField(
+                              controller: bpm,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'^[0-9]+$')),
+                              ],
+                              validator: (bpm){
+                                if(bpm!.isEmpty) return 'Informe o valor da aferição';
+                                return null;
+                              },
+                            ),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(context),
+                                child: Text("Cancelar", style: TextStyle(
+                                  color: Colors.white
+                                ),)),
+
+                            TextButton(onPressed: (){
+                              if(form.currentState!.validate()){
+                                afericoes.setAfericao(int.parse(bpm.text), DateTime.now());
+                                Navigator.pop(context);
+                              }
+                            },
+                                child: Text("Salvar",
+                        style: TextStyle(
+                            color: Colors.white,
+                        ))),
+                          ],
+                        );
+
+                        showDialog(context: context, builder: (context) => dialog);
+                      }
+
+                      @override
+                      Widget build(BuildContext context) {
+                        final afericoes = context.watch<cardioRepository>();
+                        medition = afericoes.ultimaAfericao.toString();
+                        return SafeArea(
+                          child: Container(
+                            padding: const EdgeInsets.all(16.0), // Add padding
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              // Center align
+                              children: [
+                                // Instruction section
+                                if (!isMeasuring && finalBpm == null) ...[
+                                  GestureDetector(
+                                    onTap: (){
+                                      Navigator.push(context, MaterialPageRoute(builder: (context)=> InstrucoesTela()));
+                                    },
+
+                                    child: Container(
+
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(20),
+                                        color: Color(0xff161616)
+                                      ),
+
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          Column(
+                                            children: [
+                                             Text("Instruções",style: TextStyle(
+                                               fontSize: 30,
+                                               fontWeight: FontWeight.bold
+
+                                             )),
+                                              Text("de aferição", style: TextStyle(fontSize: 15)),
+                                            ],
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.all(12.0),
+                                            child: Image.asset('assets/images/coracao.png'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(20),
+                                        color: Color(0xff161616)
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                      children: [
+                                        Column(
+                                          spacing: 0,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Text("Ultima aferição", style: TextStyle(fontSize: 15)),
+                                            Row(
+                                              spacing: 10,
+                                              children: [
+                                                Text( medition ,style: TextStyle(
+                                                    fontSize: 40,
+                                                    fontWeight: FontWeight.bold
+                                                )),
+                                                Text("bpm", style: TextStyle(fontSize: 15)),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.all(12.0),
+                                          child: Image.asset('assets/images/lastmedition.png'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: updateAfericoes,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(20),
+                                          color: Color(0xff161616)
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                        children: [
+                                          Column(
+                                            children: [
+                                              Text("Medição por", style: TextStyle(fontSize: 15)),
+                                              Text("Aparelho",style: TextStyle(
+                                                  fontSize: 30,
+                                                  fontWeight: FontWeight.bold
+
+                                              )),
+                                            ],
+                                          ),
+                                          Image.asset('assets/images/oximeter.png'),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: startMeasurement,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Color(0xff161616),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(50.0),
+                                        child: Column(
+                                          spacing: 10,
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Image.asset('assets/images/btnAferir.png'),
+                                            Text("Começar",style: TextStyle(
+                                                fontSize: 25,
+                                                fontWeight: FontWeight.bold
+
+                                            )),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+
+                                // Display section
+                                if (isMeasuring && finalBpm == null)
+                                  Column(
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.center, // Minimize row size
+                                    children: [
+
+                                      SizedBox(height: 30),
+                                      CircularPercentIndicator(
+                                        backgroundColor: Color(0xff161616),
+                                        progressColor: Color.fromARGB(255, 226, 21, 65) ,
+                                        radius: 130.0,
+                                        lineWidth: 10.0,
+                                        percent: percent.clamp(0.0, 1.0),
+                                        center: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            HeartBPMDialog(
+                                              context: context,
+                                              onRawData: (value) {
+                                                setState(() {
+                                                  if (data.length >= 100) {
+                                                    data.removeAt(0);
+                                                  }
+                                                  data.add(value);
+                                                });
+                                              },
+                                              onBPM: (value) => setState(() {
+                                                if (value < 200 && value > 40) {
+                                                  bpmValues.add(value);
+                                                  recentBpmValues.add(value);
+
+                                                  bpmValue =
+                                                      (recentBpmValues.reduce((a, b) => a + b) /
+                                                          recentBpmValues.length)
+                                                          .round();
+
+                                                  percent = bpmValues.length / 300.0;
+                                                }
+
+                                                if (bpmValues.length >= 300) {
+                                                  setState(() {
+                                                    isMeasuring = false;
+
+                                                    if (bpmValues.isNotEmpty) {
+                                                      finalBpm = bpmValue; // Calculate average BPM
+                                                      afericoes.setAfericao(finalBpm!, DateTime.now());
+                                                      finalBpm = null;
+                                                      isMeasuring = false;
+                                                    }
+                                                  });
+                                                }
+                                              }),
+                                              onFingerDetected: (detected) {
+                                                setState(() {
+                                                  fingerDetected = detected;
+                                                });
+                                              },
+                                              onFingerState: (state) {
+                                                fingerState = state;
+                                              },
+                                            ),
+
+                                            // 🔹 BPM atual sobreposto no centro do widget
+                                            if (bpmValue != null)
+                                              Positioned(
+                                                child: Text(
+                                                  "$bpmValue",
+                                                  style: TextStyle(
+                                                    fontSize: 22,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+
+                                      ),
+                                      SizedBox(height: 30),
+
+                                      if (bpmValues.isEmpty)
+                                        Text(
+                                          "Calibrando câmera...",
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+
+                                      if (bpmValues.isNotEmpty)
+                                        if (fingerDetected)
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.fingerprint,
+                                                size: 28,
+                                              ),
+                                              Text(
+                                                fingerState,
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          )
+                                        else
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.error_outline,
+                                                size: 28,
+                                              ),
+                                              Text(
+                                                fingerState,
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ],
+                                          ),
+                                    ],
+                                  ),
+
+                                if (control)
+                                  Container(
+
+                                    ),
+
+
+                                // Buttons section
+
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (isMeasuring) ...[
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          foregroundColor: Colors.white,
+                                          backgroundColor: Color.fromARGB(255, 226, 21, 65),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 40,
+                                            vertical: 15,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(25),
+                                          ),
+                                        ),
+                                        onPressed: stopMeasurement,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.stop, size: 20),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              "Cancelar",
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ]
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+
+                      }
+
+
+                    }
+                    // Helper method to categorize BPM values
+                    String _getBpmCategory(int bpm) {
+                      if (bpm < 60) return "Bradicardia (Baixo)";
+                      if (bpm <= 100) return "Normal";
+                      if (bpm <= 120) return "Levemente Elevado";
+                      return "Taquicardia (Elevado)";
+                    }
+
+                    // Helper method to get color for BPM category
+                    Color _getBpmCategoryColor(int bpm) {
+                      if (bpm < 60) return Colors.blue;
+                      if (bpm <= 100) return Colors.green;
+                      if (bpm <= 120) return Colors.red;
+                      return const Color.fromARGB(255, 255, 17, 0);
+                    }
+
+
+
+
+import 'package:flutter/material.dart';
+
+class MetricasTela extends StatefulWidget {
+  const MetricasTela({super.key});
+
+  @override
+  State<MetricasTela> createState() => _MetricasTelaState();
+}
+
+class _MetricasTelaState extends State<MetricasTela> {
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(child: SingleChildScrollView(
+      child: Container(
+
+      ),
+    ));
+  }
+}
