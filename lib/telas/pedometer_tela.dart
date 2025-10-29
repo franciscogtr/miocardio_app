@@ -66,7 +66,7 @@ class _PedometerTelaState extends State<PedometerTela> {
 
   void onDailyStepCountError(error) {
     setState(() {
-      _dailySteps = 'Contador de passos diário não disponível';
+      _dailySteps = '????';
     });
   }
 
