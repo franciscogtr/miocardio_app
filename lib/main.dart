@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:miocardio_app/repos/cardio_repository.dart';
+import 'package:miocardio_app/repos/pedometer_repository.dart';
 import 'package:provider/provider.dart';
 import 'telas/tela_principal.dart';
 
@@ -7,6 +8,7 @@ void main() {
   runApp(
     MultiProvider(providers: [
       ChangeNotifierProvider(create: (context) => cardioRepository()),
+      ChangeNotifierProvider(create: (context) => pedometerRepository()),
     ],
     child: MyApp(),)
   );

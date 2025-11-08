@@ -4,6 +4,9 @@ import 'dart:developer';
 import 'dart:async';
 import 'package:daily_pedometer2/daily_pedometer2.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:miocardio_app/repos/pedometer_repository.dart';
+import 'package:provider/provider.dart';
+
 
 String formatDate(DateTime d) {
   return d.toString().substring(0, 19);
@@ -21,6 +24,7 @@ class _PedometerTelaState extends State<PedometerTela> {
   late Stream<StepCount> _stepCountStream;
   late Stream<PedestrianStatus> _pedestrianStatusStream;
   Queue<StepCount> _history = Queue<StepCount>();
+  Queue<StepCount> _queue = Queue<StepCount>();
   String _status = ' ', _steps = '0', _dailySteps = '0';
   String _dailyDistance = '0';
   String _ritmoAtual = 'Indefinido';
@@ -33,6 +37,7 @@ class _PedometerTelaState extends State<PedometerTela> {
 
   void onDailyStepCount(StepCount event) {
     calcRitmo(event);
+    agrupaHora(event);
     setState(() {
       _dailySteps = event.steps.toString();
       double distance = event.steps.toDouble() * (1.7 * 0.415);
@@ -69,6 +74,36 @@ class _PedometerTelaState extends State<PedometerTela> {
       _dailySteps = '????';
     });
   }
+
+  void agrupaHora(StepCount event){
+
+      int passosUltimaHora;
+      final atividade = context.read<pedometerRepository>();
+
+      if(_queue.isEmpty){
+        _queue.addFirst(event);
+        print("Primeiro passo adicionado");
+      }
+      else{
+        if(_queue.last.timeStamp.hour == event.timeStamp.hour){
+          _queue.removeLast();
+          _queue.addLast(event);
+          print("Passos nessa hora ${_queue.last.steps}");
+        }
+
+        else{
+          List<StepCount> _lista = _queue.toList();
+          int i = _lista.length - 1;
+          passosUltimaHora = _lista[i].steps - _lista[i - 1].steps;
+          print("Passsos na ultima hora $passosUltimaHora");
+
+          atividade.setAtividade(passosUltimaHora, _queue.last.timeStamp);
+
+          _queue.addLast(event);
+        }
+      }
+
+    }
 
   void calcRitmo(StepCount event) {
     _history.addFirst(event);
@@ -126,6 +161,8 @@ class _PedometerTelaState extends State<PedometerTela> {
       });
     }
   }
+
+
 
   void initPlatformState() async {
     log('INITIALIZING THE STREAMS');
