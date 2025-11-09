@@ -65,6 +65,7 @@ class _CardioTelaState extends State<CardioTela> {
           ],
           validator: (bpm) {
             if (bpm!.isEmpty) return 'Informe o valor da aferição';
+
             return null;
           },
         ),
@@ -115,6 +116,16 @@ class _CardioTelaState extends State<CardioTela> {
               // Instruction section
               if (!isMeasuring && finalBpm == null) ...[
                 SizedBox(height: screenHeight * 0.01),
+
+                /*IconButton(
+                  icon: Icon(Icons.bug_report, color: Colors.orange),
+                  onPressed: () async {
+                    await context.read<cardioRepository>().limparHistorico();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Aferições de teste adicionadas!')),
+                    );
+                  },
+                ),*/
 
                 GestureDetector(
                   onTap: () {

@@ -1,4 +1,3 @@
-import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'dart:developer';
 import 'dart:async';
@@ -6,7 +5,6 @@ import 'package:daily_pedometer2/daily_pedometer2.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:miocardio_app/repos/pedometer_repository.dart';
 import 'package:provider/provider.dart';
-
 
 String formatDate(DateTime d) {
   return d.toString().substring(0, 19);
@@ -23,11 +21,13 @@ class _PedometerTelaState extends State<PedometerTela> {
   late Stream<StepCount> _dailyStepCountStream;
   late Stream<StepCount> _stepCountStream;
   late Stream<PedestrianStatus> _pedestrianStatusStream;
-  Queue<StepCount> _history = Queue<StepCount>();
-  Queue<StepCount> _queue = Queue<StepCount>();
+
+  StreamSubscription<StepCount>? _dailyStepCountSubscription;
+  StreamSubscription<StepCount>? _stepCountSubscription;
+  StreamSubscription<PedestrianStatus>? _pedestrianStatusSubscription;
+
   String _status = ' ', _steps = '0', _dailySteps = '0';
   String _dailyDistance = '0';
-  String _ritmoAtual = 'Indefinido';
 
   @override
   void initState() {
@@ -36,8 +36,13 @@ class _PedometerTelaState extends State<PedometerTela> {
   }
 
   void onDailyStepCount(StepCount event) {
-    calcRitmo(event);
-    agrupaHora(event);
+    if (!mounted) return;
+
+    // ✅ Chama métodos do repository
+    final repository = context.read<pedometerRepository>();
+    repository.calcRitmo(event);
+    repository.agrupaHora(event);
+
     setState(() {
       _dailySteps = event.steps.toString();
       double distance = event.steps.toDouble() * (1.7 * 0.415);
@@ -46,122 +51,39 @@ class _PedometerTelaState extends State<PedometerTela> {
   }
 
   void onStepCount(StepCount event) {
+    if (!mounted) return;
     setState(() {
       _steps = event.steps.toString();
     });
   }
 
   void onPedestrianStatusChanged(PedestrianStatus event) {
+    if (!mounted) return;
     setState(() {
       _status = event.status;
     });
   }
 
   void onPedestrianStatusError(error) {
+    if (!mounted) return;
     setState(() {
       _status = 'Status do Pedestre não disponível';
     });
   }
 
   void onStepCountError(error) {
+    if (!mounted) return;
     setState(() {
       _steps = 'Pedometro não disponível';
     });
   }
 
   void onDailyStepCountError(error) {
+    if (!mounted) return;
     setState(() {
       _dailySteps = '????';
     });
   }
-
-  void agrupaHora(StepCount event){
-
-      int passosUltimaHora;
-      final atividade = context.read<pedometerRepository>();
-
-      if(_queue.isEmpty){
-        _queue.addFirst(event);
-        print("Primeiro passo adicionado");
-      }
-      else{
-        if(_queue.last.timeStamp.hour == event.timeStamp.hour){
-          _queue.removeLast();
-          _queue.addLast(event);
-          print("Passos nessa hora ${_queue.last.steps}");
-        }
-
-        else{
-          List<StepCount> _lista = _queue.toList();
-          int i = _lista.length - 1;
-          passosUltimaHora = _lista[i].steps - _lista[i - 1].steps;
-          print("Passsos na ultima hora $passosUltimaHora");
-
-          atividade.setAtividade(passosUltimaHora, _queue.last.timeStamp);
-
-          _queue.addLast(event);
-        }
-      }
-
-    }
-
-  void calcRitmo(StepCount event) {
-    _history.addFirst(event);
-    StepCount first = _history.first;
-    StepCount last = _history.last;
-    int tempo = 0;
-    int tInicial = 0;
-    int tFinal = 0;
-
-    if (first.timeStamp.hour == last.timeStamp.hour) {
-      if (last.timeStamp.minute == first.timeStamp.minute) {
-        tempo = first.timeStamp.second;
-        print("Passou $tempo segundos");
-      } else {
-        tInicial = last.timeStamp.minute.toInt();
-        print(tInicial);
-        tFinal = first.timeStamp.minute.toInt();
-        print(tFinal);
-        tempo = (tFinal - tInicial) * 60;
-        print("Passou $tempo segundos");
-      }
-    } else {
-      tInicial = 60 - last.timeStamp.minute.toInt();
-      tFinal = first.timeStamp.minute.toInt();
-      tempo = (tFinal + tInicial) * 60;
-      print("Passou $tempo segundos");
-    }
-
-    if (tempo <= 600) {
-      int passosInicio = last.steps.toInt();
-      int passosFim = first.steps.toInt();
-      double pace = (passosFim - passosInicio) / tempo;
-      print("Delta $pace");
-
-      if (pace <= 80 / 60) {
-        setState(() {
-          _ritmoAtual = 'Leve';
-        });
-      }
-      if (pace > 80 / 60 && pace <= 110 / 60) {
-        setState(() {
-          _ritmoAtual = 'Moderado';
-        });
-      }
-
-      if (pace > 110 / 60) {
-        setState(() {
-          _ritmoAtual = 'Intenso';
-        });
-      }
-    } else {
-      _history.clear();
-      setState(() {
-        _ritmoAtual = 'Leve';
-      });
-    }
-  }
-
 
 
   void initPlatformState() async {
@@ -173,30 +95,38 @@ class _PedometerTelaState extends State<PedometerTela> {
     if (!await Permission.activityRecognition.isGranted) return;
 
     _pedestrianStatusStream = DailyPedometer2.pedestrianStatusStream;
-    _pedestrianStatusStream
+    _pedestrianStatusSubscription = _pedestrianStatusStream
         .listen(onPedestrianStatusChanged)
-        .onError(onPedestrianStatusError);
+      ..onError(onPedestrianStatusError);
 
     _stepCountStream = DailyPedometer2.stepCountStream;
-    _stepCountStream.listen(onStepCount).onError(onStepCountError);
+    _stepCountSubscription = _stepCountStream
+        .listen(onStepCount)
+      ..onError(onStepCountError);
 
     _dailyStepCountStream = DailyPedometer2.dailyStepCountStream;
-    _dailyStepCountStream
+    _dailyStepCountSubscription = _dailyStepCountStream
         .listen(onDailyStepCount)
-        .onError(onDailyStepCountError);
+      ..onError(onDailyStepCountError);
 
     if (!mounted) return;
   }
 
   @override
+  void dispose() {
+    _dailyStepCountSubscription?.cancel();
+    _stepCountSubscription?.cancel();
+    _pedestrianStatusSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // ✅ Obter dimensões da tela
     final Size screenSize = MediaQuery.of(context).size;
     final double screenHeight = screenSize.height;
     final double screenWidth = screenSize.width;
 
     return SafeArea(
-      // ✅ Adicionar SingleChildScrollView para evitar overflow
       child: SingleChildScrollView(
         physics: BouncingScrollPhysics(),
         child: Container(
@@ -210,7 +140,17 @@ class _PedometerTelaState extends State<PedometerTela> {
             children: [
               SizedBox(height: screenHeight * 0.02),
 
-              // ✅ Container circular principal - responsivo
+             /* IconButton(
+                icon: Icon(Icons.bug_report, color: Colors.orange),
+                onPressed: () async {
+                  await context.read<pedometerRepository>().testarSalvamento();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Aferições de teste adicionadas!')),
+                  );
+                },
+              ),*/
+
+              // Container circular principal
               Container(
                 width: screenWidth * 0.7,
                 height: screenWidth * 0.7,
@@ -263,7 +203,7 @@ class _PedometerTelaState extends State<PedometerTela> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              // ✅ Card Distância - responsivo
+              // Card Distância
               Container(
                 width: double.infinity,
                 padding: EdgeInsets.symmetric(
@@ -310,42 +250,47 @@ class _PedometerTelaState extends State<PedometerTela> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              // ✅ Card Ritmo Atual - responsivo
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: screenWidth * 0.06,
-                  vertical: screenHeight * 0.02,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(screenWidth * 0.05),
-                  color: Color(0xff161616),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("Rítmo atual", style: TextStyle(fontSize: 16)),
-                          Text(
-                            _ritmoAtual,
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
+              // ✅ Card Ritmo Atual - agora usa Consumer
+              Consumer<pedometerRepository>(
+                builder: (context, repository, child) {
+                  return Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.06,
+                      vertical: screenHeight * 0.02,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(screenWidth * 0.05),
+                      color: Color(0xff161616),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("Rítmo atual",
+                                  style: TextStyle(fontSize: 16)),
+                              Text(
+                                repository.ritmoAtual,
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        Image.asset(
+                          'assets/images/instrucoes.png',
+                          height: screenHeight * 0.08,
+                          fit: BoxFit.contain,
+                        ),
+                      ],
                     ),
-                    Image.asset(
-                      'assets/images/instrucoes.png',
-                      height: screenHeight * 0.08,
-                      fit: BoxFit.contain,
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
 
               SizedBox(height: screenHeight * 0.02),
