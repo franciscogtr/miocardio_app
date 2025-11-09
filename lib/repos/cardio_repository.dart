@@ -13,6 +13,10 @@ class cardioRepository extends ChangeNotifier {
   get ultimaAfericao => _ultimaAfericao;
   List<Afericao> get afericoes => _afericoes;
   List<Afericao> get afericoesHoje => _afericoesHoje;
+  List<Afericao> get afericoesOrdenadas {
+    return _afericoes.reversed.toList();
+  }
+
 
   cardioRepository() {
     _initRepository();
@@ -60,7 +64,7 @@ class cardioRepository extends ChangeNotifier {
         'historicoAfericoes',
         where: 'data_afericao >= ? AND data_afericao < ?',
         whereArgs: [inicioDia.toIso8601String(), fimDia.toIso8601String()],
-        orderBy: 'data_afericao ASC',
+        orderBy: 'data_afericao DESC',
       );
 
       _afericoesHoje = maps.map((row) => Afericao(

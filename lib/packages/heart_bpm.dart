@@ -39,7 +39,6 @@ class HeartBPMDialog extends StatefulWidget {
   final double? cameraWidgetWidth;
   bool? showTextValues = false;
   final double? borderRadius;
-  // final bool dedoAlinhado;
 
   /// Callback used to notify the caller of updated BPM measurement
   ///
@@ -67,7 +66,6 @@ class HeartBPMDialog extends StatefulWidget {
   /// $y_n = alpha * x_n + (1 - alpha) * y_{n-1}$
   /// ```
   double alpha = 0.6;
-  // double currentValue = 0.0;
 
   /// Additional child widget to display
   final Widget? child;
@@ -104,8 +102,8 @@ class HeartBPMDialog extends StatefulWidget {
     this.cameraWidgetWidth,
     this.showTextValues,
     this.borderRadius,
-    this.useGreenChannel = true, // Por padrão usa canal verde
-    this.onFingerDetected, // 🔹 callback para dedo
+    this.useGreenChannel = true,
+    this.onFingerDetected,
     this.onFingerState,
   });
 
@@ -161,10 +159,7 @@ class _HeartBPPView extends State<HeartBPMDialog> {
   void _deinitController() async {
     isCameraInitialized = false;
     if (_controller == null) return;
-    // await _controller.stopImageStream();
     await _controller!.dispose();
-    // while (_processing) {}
-    // _controller = null;
   }
 
   /// Initialize the camera controller
@@ -208,45 +203,86 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     }
   }
 
-  // static const int windowLength = 50;
   static const int windowLength = 150;
 
   final Queue<SensorValue> measureWindow = Queue<SensorValue>();
 
-  /// Extract green channel values from YUV420 camera image
-  double _extractGreenChannel(CameraImage image) {
-    // YUV420 format: Y (luminance) plane contains brightness info
-    // For green channel extraction from YUV, we focus on the Y plane
-    // and apply a green-weighted filter
-
+  /// 🔴 NOVA: Extrai intensidade do canal VERMELHO de YUV420
+  double _extractRedChannel(CameraImage image) {
     final Uint8List yPlane = image.planes[0].bytes;
+    final Uint8List uPlane = image.planes[1].bytes;
+    final Uint8List vPlane = image.planes[2].bytes;
+
     final int width = image.width;
     final int height = image.height;
 
-    // Sample from center region (more stable finger placement area)
+    // Amostra da região central (onde o dedo deve estar)
     final int centerX = width ~/ 2;
     final int centerY = height ~/ 2;
-    final int sampleSize = 65; // Sample 50x50 pixels from center
+    final int sampleSize = 65;
+
+    double redSum = 0;
+    int pixelCount = 0;
+
+    for (int y = centerY - sampleSize ~/ 2; y < centerY + sampleSize ~/ 2; y++) {
+      for (int x = centerX - sampleSize ~/ 2; x < centerX + sampleSize ~/ 2; x++) {
+        if (y >= 0 && y < height && x >= 0 && x < width) {
+          int yIndex = y * width + x;
+
+          // UV planes têm metade da resolução (subsampling 4:2:0)
+          int uvIndex = (y ~/ 2) * (width ~/ 2) + (x ~/ 2);
+
+          if (yIndex < yPlane.length && uvIndex < uPlane.length && uvIndex < vPlane.length) {
+            // Conversão YUV -> RGB (simplificada)
+            // R = Y + 1.402 * (V - 128)
+            double yVal = yPlane[yIndex].toDouble();
+            double vVal = vPlane[uvIndex].toDouble();
+
+            double red = yVal + 1.402 * (vVal - 128);
+            red = red.clamp(0, 255);
+
+            redSum += red;
+            pixelCount++;
+          }
+        }
+      }
+    }
+
+    return pixelCount > 0 ? redSum / pixelCount : 0.0;
+  }
+
+  /// Extract green channel values from YUV420 camera image
+  double _extractGreenChannel(CameraImage image) {
+    final Uint8List yPlane = image.planes[0].bytes;
+    final Uint8List uPlane = image.planes[1].bytes;
+    final Uint8List vPlane = image.planes[2].bytes;
+
+    final int width = image.width;
+    final int height = image.height;
+
+    final int centerX = width ~/ 2;
+    final int centerY = height ~/ 2;
+    final int sampleSize = 65;
 
     double greenSum = 0;
     int pixelCount = 0;
 
-    for (
-    int y = centerY - sampleSize ~/ 2;
-    y < centerY + sampleSize ~/ 2;
-    y++
-    ) {
-      for (
-      int x = centerX - sampleSize ~/ 2;
-      x < centerX + sampleSize ~/ 2;
-      x++
-      ) {
+    for (int y = centerY - sampleSize ~/ 2; y < centerY + sampleSize ~/ 2; y++) {
+      for (int x = centerX - sampleSize ~/ 2; x < centerX + sampleSize ~/ 2; x++) {
         if (y >= 0 && y < height && x >= 0 && x < width) {
-          int index = y * width + x;
-          if (index < yPlane.length) {
-            // For YUV420, Y plane represents luminance
-            // We can approximate green channel contribution
-            greenSum += yPlane[index].toDouble();
+          int yIndex = y * width + x;
+          int uvIndex = (y ~/ 2) * (width ~/ 2) + (x ~/ 2);
+
+          if (yIndex < yPlane.length && uvIndex < uPlane.length && uvIndex < vPlane.length) {
+            // G = Y - 0.344 * (U - 128) - 0.714 * (V - 128)
+            double yVal = yPlane[yIndex].toDouble();
+            double uVal = uPlane[uvIndex].toDouble();
+            double vVal = vPlane[uvIndex].toDouble();
+
+            double green = yVal - 0.344 * (uVal - 128) - 0.714 * (vVal - 128);
+            green = green.clamp(0, 255);
+
+            greenSum += green;
             pixelCount++;
           }
         }
@@ -256,150 +292,113 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     return pixelCount > 0 ? greenSum / pixelCount : 0.0;
   }
 
-  /// Extract average brightness from all pixels (original method)
-  double _extractAveragePixelValue(CameraImage image) {
-    return image.planes.first.bytes.reduce(
-          (value, element) => value + element,
-    ) /
-        image.planes.first.bytes.length;
-  }
+  /// 🔴 NOVA: Detecta dedo baseado na intensidade do canal VERMELHO
+  bool isFingerPlacedByRedChannel(double redIntensity) {
+    // Threshold para considerar que o dedo está cobrindo a câmera
+    // Valores típicos com flash ligado e dedo posicionado: 150-220
+    // Sem dedo ou mal posicionado: < 100
+    const double minRedIntensity = 130.0;
 
-  final List<bool> _fingerDetectionHistory = [];
-
-  bool isFingerPlaced(Queue<SensorValue> data) {
-    if (data.isEmpty) return false;
-
-    const int historyLength = 100; // últimos 50 valores (~1.5s a 30fps)
-    const double minAvg = 68; // intensidade mínima para detectar dedo
-    const double minVariance = 1.1; // variância mínima para detectar pulsação
-    const int requiredPositiveRatio = 5; // número de confirmações no histórico
-
-    // Seleciona últimos valores
-
-    List<SensorValue> listData = data.toList();
-
-    List<SensorValue> window = listData.length > historyLength
-        ? listData.sublist(listData.length - historyLength)
-        : listData;
-
-    // Média e variância
-    double avg =
-        window.map((e) => e.value).reduce((a, b) => a + b) / window.length;
-    double variance =
-        window
-            .map((e) => (e.value - avg) * (e.value - avg))
-            .reduce((a, b) => a + b) /
-            window.length;
-
-    // Limites adaptativos
-    double intensityThreshold = max(minAvg, avg * 0.6);
-    double varianceThreshold = max(minVariance, variance * 0.4);
-
-    if (variance < varianceThreshold) {
-      widget.onFingerState?.call(" Pulsação não Identificada");
+    if (redIntensity < minRedIntensity) {
+      widget.onFingerState?.call(" Posicione o dedo sobre a câmera");
+      return false;
     }
 
-    if (avg < intensityThreshold) {
-      widget.onFingerState?.call(" Pouca Iluminação Ambiente");
-    }
-
-    bool currentDetection =
-        avg > intensityThreshold && variance > varianceThreshold;
-
-    // Histórico anti-oscilação
-    _fingerDetectionHistory.add(currentDetection);
-    if (_fingerDetectionHistory.length > historyLength) {
-      _fingerDetectionHistory.removeAt(0);
-    }
-
-    int positiveCount = _fingerDetectionHistory.where((x) => x).length;
-
-    return positiveCount >= requiredPositiveRatio;
+    return true;
   }
 
   List<double> normalizedBuffer = [];
-  final int normalizationWindow = 100; // Janela para normalização
-  bool fingerDetected = true; // Estado atual da detecção do dedo
+  final int normalizationWindow = 100;
+  bool fingerDetected = false;
+
+  // Histórico de detecções para estabilidade
+  final List<bool> _fingerDetectionHistory = [];
+  static const int detectionHistoryLength = 10; // ~0.3s a 30fps
+  static const int requiredPositiveDetections = 7; // 70% de certeza
 
   void _scanImage(CameraImage image) async {
-    // 1. extrai valor do pixel (verde ou média)
+    // 🔴 1. Extrai canal VERMELHO para detectar dedo
+    double redValue = _extractRedChannel(image);
+
+    // 🔴 2. Verifica se dedo está posicionado
+    bool currentDetection = isFingerPlacedByRedChannel(redValue);
+
+    // Adiciona ao histórico para estabilizar detecção
+    _fingerDetectionHistory.add(currentDetection);
+    if (_fingerDetectionHistory.length > detectionHistoryLength) {
+      _fingerDetectionHistory.removeAt(0);
+    }
+
+    // Conta quantas detecções positivas há no histórico
+    int positiveCount = _fingerDetectionHistory.where((x) => x).length;
+    bool stableFingerDetection = positiveCount >= requiredPositiveDetections;
+
+    // 3. Se dedo NÃO detectado, reseta e aguarda
+    if (!stableFingerDetection) {
+      if (fingerDetected) {
+        // Mudou de detectado para não detectado
+        fingerDetected = false;
+        widget.onFingerDetected?.call(false);
+
+        // Limpa buffer de medição
+        measureWindow.clear();
+        normalizedBuffer.clear();
+
+        setState(() {
+          currentValue = 0;
+        });
+        widget.onBPM(0);
+      }
+
+      // Libera processamento
+      Future<void>.delayed(Duration(milliseconds: widget.sampleDelay)).then((onValue) {
+        if (mounted) {
+          setState(() {
+            _processing = false;
+          });
+        }
+      });
+      return;
+    }
+
+    // 🟢 4. Dedo detectado! Notifica se for primeira vez
+    if (!fingerDetected) {
+      fingerDetected = true;
+      widget.onFingerDetected?.call(true);
+      widget.onFingerState?.call(" Aferindo Batimentos...");
+    }
+
+    // 5. Extrai valor para análise de BPM (verde ou luminância)
     double pixelValue;
     if (widget.useGreenChannel) {
       pixelValue = _extractGreenChannel(image);
     } else {
-      pixelValue = _extractAveragePixelValue(image);
+      // Usa luminância (plano Y)
+      pixelValue = image.planes[0].bytes.reduce((a, b) => a + b) / image.planes[0].bytes.length;
     }
 
-    double normalizeCurrentValue(Queue<SensorValue> data) {
-      if (data.length < normalizationWindow) return 0.0;
-
-      // Usa apenas os últimos N valores para normalização
-      List<SensorValue> listData = data.toList();
-      List<SensorValue> window = listData.sublist(
-        data.length - normalizationWindow,
-      );
-
-      double minVal = window
-          .map((e) => e.value.toDouble())
-          .reduce((a, b) => a < b ? a : b);
-      double maxVal = window
-          .map((e) => e.value.toDouble())
-          .reduce((a, b) => a > b ? a : b);
-      double range = maxVal - minVal;
-
-      // Threshold mais realista baseado na variação esperada do sinal
-      if (range < 3.0) return 0.0;
-
-      return (data.last.value.toDouble() - minVal) / range;
-    }
-
-    // 2. adiciona no buffer
-    // measureWindow.remove(0);
-    // measureWindow.add(SensorValue(time: DateTime.now(), value: pixelValue));
-
+    // 6. Adiciona ao buffer de medição
     if (measureWindow.length >= windowLength) {
       measureWindow.removeFirst();
     }
-
     measureWindow.addLast(SensorValue(time: DateTime.now(), value: pixelValue));
 
-    // Nova normalização melhorada
-    if (!isFingerPlaced(measureWindow)) {
-      if (widget.onFingerDetected != null) {
-        fingerDetected = false;
-        widget.onFingerDetected!(fingerDetected);
-        // widget.onFingerState!("Dedo não detectado");
-      }
-      setState(() {
-        currentValue = 0;
-      });
-      widget.onBPM(currentValue);
-    } else {
-      if (widget.onFingerDetected != null) {
-        fingerDetected = true;
-        widget.onFingerDetected!(fingerDetected);
-        widget.onFingerState?.call(" Aferindo Batimentos...");
-      }
-      // Normalização com janela deslizante
-      double normalizedValue = normalizeCurrentValue(measureWindow);
+    // 7. Normaliza e calcula BPM
+    double normalizedValue = _normalizeCurrentValue(measureWindow);
 
-      // Atualiza buffer normalizado
-      if (normalizedBuffer.length >= windowLength) {
-        normalizedBuffer.removeAt(0);
-      }
-      normalizedBuffer.add(normalizedValue);
-
-      _smoothBPM(normalizedValue).then((value) {
-        widget.onRawData?.call(
-          SensorValue(time: DateTime.now(), value: normalizedValue),
-        );
-      });
+    if (normalizedBuffer.length >= windowLength) {
+      normalizedBuffer.removeAt(0);
     }
+    normalizedBuffer.add(normalizedValue);
 
-    // 5. libera processamento após o delay configurado
-    Future<void>.delayed(Duration(milliseconds: widget.sampleDelay)).then((
-        onValue,
-        ) {
+    _smoothBPM(normalizedValue).then((value) {
+      widget.onRawData?.call(
+        SensorValue(time: DateTime.now(), value: normalizedValue),
+      );
+    });
+
+    // 8. Libera processamento após delay
+    Future<void>.delayed(Duration(milliseconds: widget.sampleDelay)).then((onValue) {
       if (mounted) {
         setState(() {
           _processing = false;
@@ -408,25 +407,36 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     });
   }
 
-  /// Smooth the raw measurements using Exponential averaging
-  /// the scaling factor [alpha] is used to compute exponential moving average of the
-  /// realtime data using the formula:
-  /// ```
-  /// $y_n = alpha * x_n + (1 - alpha) * y_{n-1}$
-  /// ```
+  double _normalizeCurrentValue(Queue<SensorValue> data) {
+    if (data.length < normalizationWindow) return 0.0;
 
+    List<SensorValue> listData = data.toList();
+    List<SensorValue> window = listData.sublist(
+      data.length - normalizationWindow,
+    );
+
+    double minVal = window
+        .map((e) => e.value.toDouble())
+        .reduce((a, b) => a < b ? a : b);
+    double maxVal = window
+        .map((e) => e.value.toDouble())
+        .reduce((a, b) => a > b ? a : b);
+    double range = maxVal - minVal;
+
+    if (range < 3.0) return 0.0;
+
+    return (data.last.value.toDouble() - minVal) / range;
+  }
+
+  /// Smooth the raw measurements using Exponential averaging
   /// Nova função de cálculo de BPM com filtro + detecção de picos
   Future<int> _smoothBPM(double newValue) async {
-    // 1. parâmetros de estabilidade
-    const int minWindowSize = 150; // ~5s a 30fps
-    const int peakMinDistanceMs =
-    300; // intervalo mínimo entre batidas (~200 bpm máx)
-    const int avgWindowSize = 5; // média móvel simples para suavizar ruído
+    const int minWindowSize = 150;
+    const int peakMinDistanceMs = 300;
+    const int avgWindowSize = 5;
 
-    // 2. aplica média móvel simples
     double smoothedValue = movingAverage(measureWindow, avgWindowSize);
 
-    // 3. adiciona a nova amostra suavizada
     if (measureWindow.length >= windowLength) {
       measureWindow.removeFirst();
     }
@@ -434,12 +444,10 @@ class _HeartBPPView extends State<HeartBPMDialog> {
       SensorValue(time: DateTime.now(), value: smoothedValue),
     );
 
-    // só processa se tiver dados suficientes
     if (measureWindow.length < minWindowSize) {
       return currentValue;
     }
 
-    // 4. detecta picos (máximos locais com intervalo mínimo)
     double localMean = movingAverage(measureWindow, avgWindowSize);
     double localStd = stdDeviation(measureWindow, avgWindowSize);
 
@@ -449,13 +457,11 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     List<SensorValue> measureWindowList = measureWindow.toList();
 
     for (int i = 2; i < measureWindowList.length - 2; i++) {
-      // Máximo local robusto + threshold
       if (measureWindowList[i].value > threshold &&
           measureWindowList[i].value > measureWindowList[i - 1].value &&
           measureWindowList[i].value > measureWindowList[i + 1].value &&
           measureWindowList[i].value >= measureWindowList[i - 2].value &&
           measureWindowList[i].value >= measureWindowList[i + 2].value) {
-        // Distância mínima entre picos
         if (peaks.isEmpty ||
             measureWindowList[i].time.millisecondsSinceEpoch - peaks.last >
                 peakMinDistanceMs) {
@@ -464,27 +470,20 @@ class _HeartBPPView extends State<HeartBPMDialog> {
       }
     }
 
-    // precisa de pelo menos 2 picos para calcular intervalos
     if (peaks.length < 2) {
       return currentValue;
     }
 
-    // 5. calcula intervalos RR (distância entre batidas)
     List<int> intervals = [];
     for (int i = 1; i < peaks.length; i++) {
       intervals.add(peaks[i] - peaks[i - 1]);
     }
 
-    // média dos intervalos
     double avgInterval = intervals.reduce((a, b) => a + b) / intervals.length;
-
-    // 6. converte para BPM
     double bpm = 60000 / avgInterval;
 
-    // aplica suavização exponencial (EMA) para evitar oscilações bruscas
     bpm = (1 - widget.alpha) * currentValue + widget.alpha * bpm;
 
-    // atualiza valor atual
     setState(() {
       currentValue = bpm.toInt();
     });
@@ -494,7 +493,6 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     return currentValue;
   }
 
-  /// Função auxiliar para média móvel simples
   double movingAverage(Queue<SensorValue> data, int windowSize) {
     List<SensorValue> listData = data.toList();
 
@@ -506,7 +504,6 @@ class _HeartBPPView extends State<HeartBPMDialog> {
     return sum / windowSize;
   }
 
-  /// Desvio padrão simples
   double stdDeviation(Queue<SensorValue> data, int windowSize) {
     if (data.length < windowSize) return 0.0;
 
@@ -538,7 +535,6 @@ class _HeartBPPView extends State<HeartBPMDialog> {
         ),
       )
           : Center(
-        /// A developer has to customize the loading widget (Implemented by Karl Mathuthu)
         child: widget.centerLoadingWidget != null
             ? widget.centerLoadingWidget
             : CircularProgressIndicator(),

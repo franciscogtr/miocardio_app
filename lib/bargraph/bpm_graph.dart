@@ -2,6 +2,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:miocardio_app/bargraph/bpm_data.dart';
+import 'package:miocardio_app/model/afericao.dart';
 import 'package:miocardio_app/repos/cardio_repository.dart';
 import 'package:provider/provider.dart';
 
@@ -19,8 +20,11 @@ class BpmLineGraph extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<cardioRepository>(
       builder: (context, repository, child) {
+        // 🔄 USA A LISTA ORDENADA (mais antiga → mais recente)
+        List<Afericao> afericoesParaGrafico = repository.afericoesOrdenadas;
+
         // Se não tiver dados
-        if (repository.afericoes.isEmpty) {
+        if (afericoesParaGrafico.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -41,14 +45,14 @@ class BpmLineGraph extends StatelessWidget {
           );
         }
 
-        // Inicializa dados da linha
-        BpmLineData lineData = BpmLineData(afericoes: repository.afericoes);
+        // Inicializa dados da linha COM A ORDEM CORRETA
+        BpmLineData lineData = BpmLineData(afericoes: afericoesParaGrafico);
         lineData.initializeLineData();
 
         // Calcula BPM médio
-        double bpmMedio = repository.afericoes
+        double bpmMedio = afericoesParaGrafico
             .map((a) => a.bpm)
-            .reduce((a, b) => a + b) / repository.afericoes.length;
+            .reduce((a, b) => a + b) / afericoesParaGrafico.length;
 
         return LineChart(
           LineChartData(
@@ -82,8 +86,8 @@ class BpmLineGraph extends StatelessWidget {
                   showTitles: false,
                   getTitlesWidget: (value, meta) {
                     int index = value.toInt();
-                    if (index >= 0 && index < repository.afericoes.length) {
-                      DateTime data = repository.afericoes[index].dataAfericao;
+                    if (index >= 0 && index < afericoesParaGrafico.length) {
+                      DateTime data = afericoesParaGrafico[index].dataAfericao;
                       return Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: Text(
@@ -150,7 +154,7 @@ class BpmLineGraph extends StatelessWidget {
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (touchedSpots) {
                   return touchedSpots.map((spot) {
-                    DateTime data = repository.afericoes[spot.x.toInt()].dataAfericao;
+                    DateTime data = afericoesParaGrafico[spot.x.toInt()].dataAfericao;
                     return LineTooltipItem(
                       '${spot.y.toInt()} bpm\n${data.hour}:${data.minute.toString().padLeft(2, '0')}',
                       TextStyle(
