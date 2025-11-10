@@ -10,7 +10,8 @@ class pedometerRepository extends ChangeNotifier {
   late Database db;
   List<Atividade> _atividades = [];
   List<Atividade> _ultimasSeteHoras = [];
-  List<Atividade> _atividadesHoje = []; // ✅ NOVO: Todas as horas do dia
+  List<Atividade> _atividadesHoje = [];
+  List<Atividade> _atividadesSemanais = [];
 
   Queue<StepCount> history = Queue<StepCount>();
   String ritmoAtual = 'Indefinido';
@@ -20,7 +21,8 @@ class pedometerRepository extends ChangeNotifier {
 
   List<Atividade> get atividades => _atividades;
   List<Atividade> get ultimasSeteHoras => _ultimasSeteHoras;
-  List<Atividade> get atividadesHoje => _atividadesHoje; // ✅ NOVO
+  List<Atividade> get atividadesHoje => _atividadesHoje;
+  List<Atividade> get atividadesSemanais => _atividadesSemanais;
 
   pedometerRepository() {
     _initRepository();
@@ -219,6 +221,57 @@ class pedometerRepository extends ChangeNotifier {
     } catch (e) {
       print("❌ Erro ao atualizar: $e");
     }
+  }
+
+  // ✅ Busca atividades dos últimos 7 dias (agrupadas por dia)
+  Future<List<Atividade>> getAtividadesSemanais() async {
+    try {
+      db = await DB.instance.database;
+
+      DateTime hoje = DateTime.now();
+      DateTime seteDiasAtras = hoje.subtract(Duration(days: 6));
+      DateTime inicioDaSemana = DateTime(seteDiasAtras.year, seteDiasAtras.month, seteDiasAtras.day);
+
+      final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT 
+        DATE(data) as dia,
+        SUM(passos) as total_passos
+      FROM historicoAtividade
+      WHERE data >= ?
+      GROUP BY DATE(data)
+      ORDER BY dia ASC
+    ''', [inicioDaSemana.toIso8601String()]);
+
+      _atividadesSemanais = List.generate(maps.length, (i) {
+        return Atividade(
+          passos: maps[i]['total_passos'] as int,
+          data: DateTime.parse(maps[i]['dia']),
+        );
+      });
+
+      print("📅 Carregados ${_atividadesSemanais.length} dias para a semana");
+      notifyListeners();
+      return _atividadesSemanais;
+    } catch (e) {
+      print("❌ Erro em getAtividadesSemanais: $e");
+      return [];
+    }
+  }
+
+  // ✅ Calcula total de passos da semana
+  int getTotalPassosSemana() {
+    return _atividadesSemanais.fold(0, (sum, atividade) => sum + atividade.passos);
+  }
+
+// ✅ Calcula média de passos por dia
+  double getMediaPassosDia() {
+    if (_atividadesSemanais.isEmpty) return 0;
+    return getTotalPassosSemana() / _atividadesSemanais.length;
+  }
+
+// ✅ Calcula distância total da semana
+  double getDistanciaTotalSemana() {
+    return getTotalPassosSemana() * (1.7 * 0.415);
   }
 
   // ✅ Agrupa passos por hora usando BD

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:miocardio_app/bargraph/activity_graph.dart';
-import 'package:miocardio_app/bargraph/bpm_graph.dart';
+import 'package:miocardio_app/bargraph/weekly_activity_graph.dart';
+import 'package:miocardio_app/bargraph/weekly_bpm_graph.dart';
 import 'package:miocardio_app/repos/pedometer_repository.dart';
 import 'package:miocardio_app/repos/cardio_repository.dart';
-
 import 'package:provider/provider.dart';
 
 class MetricasTela extends StatefulWidget {
@@ -17,10 +16,14 @@ class _MetricasTelaState extends State<MetricasTela> {
   @override
   void initState() {
     super.initState();
-    // Carrega os dados ao abrir a tela
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<pedometerRepository>().getUltimasSeteHoras();
+      _carregarDadosSemanais();
     });
+  }
+
+  void _carregarDadosSemanais() {
+    context.read<pedometerRepository>().getAtividadesSemanais();
+    context.read<cardioRepository>().getAfericoesSemanais();
   }
 
   @override
@@ -40,7 +43,7 @@ class _MetricasTelaState extends State<MetricasTela> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ✅ Cabeçalho da tela
+              // ✅ Cabeçalho
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -56,7 +59,7 @@ class _MetricasTelaState extends State<MetricasTela> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Hoje',
+                        'Últimos 7 dias',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -64,11 +67,10 @@ class _MetricasTelaState extends State<MetricasTela> {
                       ),
                     ],
                   ),
-                  // Botão de atualizar
                   IconButton(
                     icon: Icon(Icons.refresh, size: 28),
                     onPressed: () {
-                      context.read<pedometerRepository>().getUltimasSeteHoras();
+                      _carregarDadosSemanais();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Dados atualizados!'),
@@ -82,42 +84,54 @@ class _MetricasTelaState extends State<MetricasTela> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              // ✅ Cards de estatísticas resumidas
+              // ✅ Cards de estatísticas - Passos
               Consumer<pedometerRepository>(
                 builder: (context, repository, child) {
-                  int totalPassos = repository.atividadesHoje
-                      .fold(0, (sum, atividade) => sum + atividade.passos);
+                  int totalPassos = repository.getTotalPassosSemana();
+                  double mediaPassos = repository.getMediaPassosDia();
+                  double distanciaTotal = repository.getDistanciaTotalSemana();
 
-                  int horasAtivas = repository.ultimasSeteHoras.length;
-
-                  double mediaPassos = horasAtivas > 0
-                      ? totalPassos / horasAtivas
-                      : 0;
-
-                  return Row(
+                  return Column(
                     children: [
-                      // Card Total
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Total',
-                          value: totalPassos.toString(),
-                          subtitle: 'passos hoje',
-                          icon: Icons.directions_walk,
-                          color: Color.fromARGB(255, 226, 21, 65),
-                          screenHeight: screenHeight,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Total',
+                              value: totalPassos.toString(),
+                              subtitle: 'passos',
+                              icon: Icons.directions_walk,
+                              color: Color.fromARGB(255, 226, 21, 65),
+                              screenHeight: screenHeight,
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Distância',
+                              value: '${(distanciaTotal / 1000).toStringAsFixed(1)} km',
+                              subtitle: 'percorridos',
+                              icon: Icons.location_on,
+                              color: Color.fromARGB(255, 226, 21, 65),
+                              screenHeight: screenHeight,
+                            ),
+                          ),
+                        ],
                       ),
-                      SizedBox(width: 12),
-                      // Card Média
-                      Expanded(
-                        child: _buildStatCard(
-                          title: 'Média',
-                          value: mediaPassos.toInt().toString(),
-                          subtitle: 'passos/hora',
-                          icon: Icons.trending_up,
-                          color: Colors.blue,
-                          screenHeight: screenHeight,
-                        ),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatCard(
+                              title: 'Média Diária',
+                              value: mediaPassos.toInt().toString(),
+                              subtitle: 'passos/dia',
+                              icon: Icons.analytics_outlined,
+                              color: Colors.blue,
+                              screenHeight: screenHeight,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   );
@@ -126,7 +140,7 @@ class _MetricasTelaState extends State<MetricasTela> {
 
               SizedBox(height: screenHeight * 0.03),
 
-              // ✅ Título do gráfico
+              // ✅ Gráfico de passos semanais
               Container(
                 padding: EdgeInsets.symmetric(horizontal: 8),
                 child: Row(
@@ -139,7 +153,7 @@ class _MetricasTelaState extends State<MetricasTela> {
                     ),
                     SizedBox(width: 8),
                     Text(
-                      "Últimas 7 horas",
+                      "Passos Diários",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -151,7 +165,6 @@ class _MetricasTelaState extends State<MetricasTela> {
 
               SizedBox(height: screenHeight * 0.02),
 
-              // ✅ Gráfico
               Container(
                 height: screenHeight * 0.35,
                 padding: EdgeInsets.all(16),
@@ -159,42 +172,81 @@ class _MetricasTelaState extends State<MetricasTela> {
                   color: Color(0xff161616),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: MyActivityGraph(),
+                child: WeeklyStepsGraph(),
               ),
-
-              // Adicione esta seção após o gráfico de passos na MetricasTela
 
               SizedBox(height: screenHeight * 0.03),
 
-// ✅ Título do gráfico de BPM
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.favorite,
-                      color: Color.fromARGB(255, 226, 21, 65),
-                      size: screenWidth * 0.06,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      "Aferições hoje",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+              // ✅ Detalhes dia a dia - Passos
+              Consumer<pedometerRepository>(
+                builder: (context, repository, child) {
+                  if (repository.atividadesSemanais.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(Icons.history, size: 64, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'Nenhuma atividade esta semana',
+                              style: TextStyle(color: Colors.grey, fontSize: 16),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Detalhes Diários',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${repository.atividadesSemanais.length} dias',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: repository.atividadesSemanais.length,
+                        itemBuilder: (context, index) {
+                          final atividade = repository.atividadesSemanais[index];
+                          return _buildDailyActivityItem(
+                            atividade: atividade,
+                            screenWidth: screenWidth,
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
               ),
 
-              SizedBox(height: screenHeight * 0.02),
+              SizedBox(height: screenHeight * 0.03),
 
-// ✅ Cards de estatísticas de BPM
+              // ✅ Cards de estatísticas - BPM
               Consumer<cardioRepository>(
                 builder: (context, cardioRepo, child) {
-                  if (cardioRepo.afericoesHoje.isEmpty) {
+                  if (cardioRepo.afericoesSemanais.isEmpty) {
                     return Container(
                       height: screenHeight * 0.15,
                       padding: EdgeInsets.all(16),
@@ -204,24 +256,16 @@ class _MetricasTelaState extends State<MetricasTela> {
                       ),
                       child: Center(
                         child: Text(
-                          'Nenhuma aferição hoje',
+                          'Nenhuma aferição esta semana',
                           style: TextStyle(color: Colors.grey),
                         ),
                       ),
                     );
                   }
 
-                  int menorBpm = cardioRepo.afericoesHoje
-                      .map((a) => a.bpm)
-                      .reduce((a, b) => a < b ? a : b);
-
-                  int maiorBpm = cardioRepo.afericoesHoje
-                      .map((a) => a.bpm)
-                      .reduce((a,b) => a > b ? a : b);
-
-                  double medioBpm = cardioRepo.afericoesHoje
-                      .map((a) => a.bpm)
-                      .reduce((a, b) => a + b) / cardioRepo.afericoesHoje.length;
+                  int menorBpm = cardioRepo.getMenorBpmSemana();
+                  int maiorBpm = cardioRepo.getMaiorBpmSemana();
+                  double medioBpm = cardioRepo.getBpmMedioSemana();
 
                   return Row(
                     children: [
@@ -262,9 +306,34 @@ class _MetricasTelaState extends State<MetricasTela> {
                 },
               ),
 
+              SizedBox(height: screenHeight * 0.03),
+
+              // ✅ Título do gráfico de BPM
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.favorite,
+                      color: Color.fromARGB(255, 226, 21, 65),
+                      size: screenWidth * 0.06,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      "Aferições Semanais",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               SizedBox(height: screenHeight * 0.02),
 
-// ✅ Gráfico de BPM
+              // ✅ Gráfico de BPM
               Container(
                 height: screenHeight * 0.35,
                 padding: EdgeInsets.all(16),
@@ -272,84 +341,9 @@ class _MetricasTelaState extends State<MetricasTela> {
                   color: Color(0xff161616),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: BpmLineGraph(),
+                child: WeeklyBpmGraph(),
               ),
 
-              SizedBox(height: screenHeight * 0.03),
-
-              // Substituir a seção de "Lista detalhada de horas"
-                // ✅ Lista detalhada de TODAS as horas do dia
-              Consumer<pedometerRepository>(
-                builder: (context, repository, child) {
-                  // ✅ MUDANÇA: Usa atividadesHoje em vez de ultimasSeteHoras
-                  if (repository.atividadesHoje.isEmpty) {
-                    return Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.history,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'Nenhuma atividade hoje',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Detalhes Hora a Hora',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${repository.atividadesHoje.length} horas',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 12),
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        itemCount: repository.atividadesHoje.length,
-                        itemBuilder: (context, index) {
-                          final atividade = repository.atividadesHoje[index];
-
-                          return _buildActivityListItem(
-                            atividade: atividade,
-                            screenWidth: screenWidth,
-                          );
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
               SizedBox(height: screenHeight * 0.02),
             ],
           ),
@@ -358,7 +352,6 @@ class _MetricasTelaState extends State<MetricasTela> {
     );
   }
 
-  // ✅ Widget para cards de estatísticas
   Widget _buildStatCard({
     required String title,
     required String value,
@@ -411,25 +404,27 @@ class _MetricasTelaState extends State<MetricasTela> {
     );
   }
 
-  // ✅ Widget para item da lista de atividades
-  Widget _buildActivityListItem({
+  Widget _buildDailyActivityItem({
     required atividade,
     required double screenWidth,
   }) {
-    // Determina intensidade com base nos passos
     String intensidade;
     Color corIntensidade;
 
-    if (atividade.passos < 600) {
-      intensidade = 'Leve';
-      corIntensidade = Colors.green;
-    } else if (atividade.passos < 1000) {
+    // Meta diária: 10.000 passos
+    if (atividade.passos < 5000) {
+      intensidade = 'Baixo';
+      corIntensidade = Colors.blue;
+    } else if (atividade.passos < 10000) {
       intensidade = 'Moderado';
       corIntensidade = Colors.orange;
     } else {
-      intensidade = 'Intenso';
-      corIntensidade = Color.fromARGB(255, 226, 21, 65);
+      intensidade = 'Excelente';
+      corIntensidade = Colors.green;
     }
+
+    final dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    String diaSemana = dias[atividade.data.weekday % 7];
 
     return Container(
       margin: EdgeInsets.only(bottom: 12),
@@ -440,33 +435,29 @@ class _MetricasTelaState extends State<MetricasTela> {
       ),
       child: Row(
         children: [
-          // Hora
           Container(
             width: 60,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${atividade.data.hour}h',
+                  diaSemana,
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Colors.grey,
                   ),
                 ),
                 Text(
-                  '${atividade.data.minute.toString().padLeft(2, '0')}m',
+                  '${atividade.data.day}/${atividade.data.month}',
                   style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
             ),
           ),
-
           SizedBox(width: 16),
-
-          // Barra de progresso visual
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,18 +472,12 @@ class _MetricasTelaState extends State<MetricasTela> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        intensidade,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: corIntensidade,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Text(
+                      intensidade,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: corIntensidade,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
@@ -501,7 +486,7 @@ class _MetricasTelaState extends State<MetricasTela> {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
-                    value: (atividade.passos / 1000).clamp(0.0, 1.0),
+                    value: (atividade.passos / 10000).clamp(0.0, 1.0),
                     backgroundColor: Colors.grey[800],
                     valueColor: AlwaysStoppedAnimation<Color>(corIntensidade),
                     minHeight: 6,

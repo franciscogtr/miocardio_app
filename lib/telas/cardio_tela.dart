@@ -477,10 +477,6 @@ class _CardioTelaState extends State<CardioTela> {
                   ],
                 ),
 
-              // Buttons section
-              if (isMeasuring) ...[
-
-              ],
             ],
           ),
         ),

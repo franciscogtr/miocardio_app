@@ -1,13 +1,13 @@
-// lib/bargraph/bpm_line_graph.dart
+// lib/bargraph/weekly_bpm_graph.dart
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:miocardio_app/bargraph/bpm_data.dart';
+import 'package:miocardio_app/bargraph/weekly_bpm_data.dart';
 import 'package:miocardio_app/model/afericao.dart';
 import 'package:miocardio_app/repos/cardio_repository.dart';
 import 'package:provider/provider.dart';
 
-class BpmLineGraph extends StatelessWidget {
-  const BpmLineGraph({super.key});
+class WeeklyBpmGraph extends StatelessWidget {
+  const WeeklyBpmGraph({super.key});
 
   Color _getBpmColor(double bpm) {
     if (bpm < 60) return Colors.blue;
@@ -20,10 +20,8 @@ class BpmLineGraph extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<cardioRepository>(
       builder: (context, repository, child) {
-        // 🔄 USA A LISTA ORDENADA (mais antiga → mais recente)
-        List<Afericao> afericoesParaGrafico = repository.afericoesHojeOrdenadas;
+        List<Afericao> afericoesParaGrafico = repository.afericoesSemanais;
 
-        // Se não tiver dados
         if (afericoesParaGrafico.isEmpty) {
           return Center(
             child: Column(
@@ -32,7 +30,7 @@ class BpmLineGraph extends StatelessWidget {
                 Icon(Icons.favorite_border, size: 48, color: Colors.grey),
                 SizedBox(height: 16),
                 Text(
-                  'Nenhuma aferição registrada',
+                  'Nenhuma aferição esta semana',
                   style: TextStyle(color: Colors.grey, fontSize: 16),
                 ),
                 SizedBox(height: 8),
@@ -45,22 +43,16 @@ class BpmLineGraph extends StatelessWidget {
           );
         }
 
-        // Inicializa dados da linha COM A ORDEM CORRETA
-        BpmLineData lineData = BpmLineData(afericoes: afericoesParaGrafico);
+        WeeklyBpmData lineData = WeeklyBpmData(afericoes: afericoesParaGrafico);
         lineData.initializeLineData();
 
-        // Calcula BPM médio
-        double bpmMedio = afericoesParaGrafico
-            .map((a) => a.bpm)
-            .reduce((a, b) => a + b) / afericoesParaGrafico.length;
+        double bpmMedio = repository.getBpmMedioSemana();
 
         return LineChart(
           LineChartData(
             maxY: lineData.getMaxY(),
             minY: lineData.getMinY(),
-            gridData: FlGridData(
-              show: false,
-            ),
+            gridData: FlGridData(show: false),
             borderData: FlBorderData(show: false),
             titlesData: FlTitlesData(
               show: true,
@@ -84,23 +76,6 @@ class BpmLineGraph extends StatelessWidget {
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: false,
-                  getTitlesWidget: (value, meta) {
-                    int index = value.toInt();
-                    if (index >= 0 && index < afericoesParaGrafico.length) {
-                      DateTime data = afericoesParaGrafico[index].dataAfericao;
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8.0),
-                        child: Text(
-                          '${data.hour}:${data.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 10,
-                          ),
-                        ),
-                      );
-                    }
-                    return Text('');
-                  },
                 ),
               ),
             ),
@@ -137,31 +112,35 @@ class BpmLineGraph extends StatelessWidget {
                 ),
               ),
               // Linha de referência - BPM médio
-              LineChartBarData(
-                spots: [
-                  FlSpot(0, bpmMedio),
-                  FlSpot(lineData.lineData.length - 1.0, bpmMedio),
-                ],
-                isCurved: false,
-                color: Colors.blue,
-                barWidth: 2,
-                dotData: FlDotData(show: false),
-                dashArray: [5, 5],
-              ),
+              if (bpmMedio > 0)
+                LineChartBarData(
+                  spots: [
+                    FlSpot(0, bpmMedio),
+                    FlSpot(lineData.lineData.length - 1.0, bpmMedio),
+                  ],
+                  isCurved: false,
+                  color: Colors.blue,
+                  barWidth: 2,
+                  dotData: FlDotData(show: false),
+                  dashArray: [5, 5],
+                ),
             ],
             lineTouchData: LineTouchData(
               enabled: true,
               touchTooltipData: LineTouchTooltipData(
                 getTooltipItems: (touchedSpots) {
                   return touchedSpots.map((spot) {
-                    DateTime data = afericoesParaGrafico[spot.x.toInt()].dataAfericao;
-                    return LineTooltipItem(
-                      '${spot.y.toInt()} bpm\n${data.hour}:${data.minute.toString().padLeft(2, '0')}',
-                      TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    );
+                    if (spot.x.toInt() >= 0 && spot.x.toInt() < afericoesParaGrafico.length) {
+                      DateTime data = afericoesParaGrafico[spot.x.toInt()].dataAfericao;
+                      return LineTooltipItem(
+                        '${spot.y.toInt()} bpm\n${data.day}/${data.month} ${data.hour}:${data.minute.toString().padLeft(2, '0')}',
+                        TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }
+                    return null;
                   }).toList();
                 },
               ),

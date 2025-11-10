@@ -8,13 +8,16 @@ class cardioRepository extends ChangeNotifier {
   late Database db;
   List<Afericao> _afericoes = [];
   List<Afericao> _afericoesHoje = [];
+  List<Afericao> _afericoesSemanais = [];
   int _ultimaAfericao = 0;
 
   get ultimaAfericao => _ultimaAfericao;
   List<Afericao> get afericoes => _afericoes;
   List<Afericao> get afericoesHoje => _afericoesHoje;
-  List<Afericao> get afericoesOrdenadas {
-    return _afericoes.reversed.toList();
+  List<Afericao> get afericoesSemanais => _afericoesSemanais;
+
+  List<Afericao> get afericoesHojeOrdenadas {
+    return _afericoesHoje.reversed.toList();
   }
 
 
@@ -81,6 +84,57 @@ class cardioRepository extends ChangeNotifier {
       return [];
     }
   }
+
+  // ✅ Busca aferições da última semana
+  Future<List<Afericao>> getAfericoesSemanais() async {
+    try {
+      db = await DB.instance.database;
+
+      DateTime hoje = DateTime.now();
+      DateTime seteDiasAtras = hoje.subtract(Duration(days: 6));
+      DateTime inicioDaSemana = DateTime(seteDiasAtras.year, seteDiasAtras.month, seteDiasAtras.day);
+
+      final List<Map<String, dynamic>> maps = await db.query(
+        'historicoAfericoes',
+        where: 'data_afericao >= ?',
+        whereArgs: [inicioDaSemana.toIso8601String()],
+        orderBy: 'data_afericao ASC',
+      );
+
+      _afericoesSemanais = maps.map((row) => Afericao(
+        id: row['id'] as int,
+        bpm: row['bpm'] as int,
+        dataAfericao: DateTime.parse(row['data_afericao'] as String),
+      )).toList();
+
+      print("💓 Carregadas ${_afericoesSemanais.length} aferições da semana");
+      notifyListeners();
+      return _afericoesSemanais;
+    } catch (e) {
+      print("❌ Erro em getAfericoesSemanais: $e");
+      return [];
+    }
+  }
+
+  // ✅ Calcula BPM médio da semana
+  double getBpmMedioSemana() {
+    if (_afericoesSemanais.isEmpty) return 0;
+    int soma = _afericoesSemanais.fold(0, (sum, a) => sum + a.bpm);
+    return soma / _afericoesSemanais.length;
+  }
+
+// ✅ Encontra menor BPM da semana
+  int getMenorBpmSemana() {
+    if (_afericoesSemanais.isEmpty) return 0;
+    return _afericoesSemanais.map((a) => a.bpm).reduce((a, b) => a < b ? a : b);
+  }
+
+// ✅ Encontra maior BPM da semana
+  int getMaiorBpmSemana() {
+    if (_afericoesSemanais.isEmpty) return 0;
+    return _afericoesSemanais.map((a) => a.bpm).reduce((a, b) => a > b ? a : b);
+  }
+
 
   setAfericao(int bpm, DateTime momento) async {
     try {

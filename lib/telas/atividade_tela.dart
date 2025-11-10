@@ -31,7 +31,8 @@ class _AtividadeTelaState extends State<AtividadeTela> {
   String _status = 'parado', _steps = '0', _dailySteps = '0';
   String _dailyDistance = '0';
   String _ritmoAtual = 'Indefinido';
-  Color _colorRitmoAtual = Colors.blue;
+  Color _colorRitmoAtual = Colors.white;
+  String _mediaPassos = '0';
 
   @override
   void initState() {
@@ -50,14 +51,21 @@ class _AtividadeTelaState extends State<AtividadeTela> {
     int totalPassos = repository.atividadesHoje.fold(0, (sum, atividade) => sum + atividade.passos);
     String ritmo = repository.ritmoAtual;
 
+    int horasAtivas = repository.ultimasSeteHoras.length;
+
+    double mediaPassos = horasAtivas > 0
+        ? totalPassos / horasAtivas
+        : 0;
+
     setState(() {
       //_dailySteps = event.steps.toString();
+      _mediaPassos = mediaPassos.toInt().toString();
       _dailySteps = totalPassos.toString();
       double distance = totalPassos * (1.7 * 0.415);
       _dailyDistance = distance.toInt().toString();
       _ritmoAtual = ritmo;
       if(_ritmoAtual == 'Leve'){
-        _colorRitmoAtual = Colors.blue;
+        _colorRitmoAtual = Colors.green;
       }
       if(_ritmoAtual == 'Moderado'){
         _colorRitmoAtual = Colors.orange;
@@ -187,7 +195,7 @@ class _AtividadeTelaState extends State<AtividadeTela> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Minhas Métricas',
+                        'Atividade Diária',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey,
@@ -233,16 +241,47 @@ class _AtividadeTelaState extends State<AtividadeTela> {
 
               SizedBox(height: screenHeight * 0.0125),*/
 
-              Row(
+              // ✅ Cards de estatísticas resumidas
+            Row(
                     children: [
+                      // Card Total
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Total',
+                          value: _dailySteps,
+                          subtitle: 'passos',
+                          icon: Icons.directions_walk,
+                          color: Color.fromARGB(255, 226, 21, 65),
+                          screenHeight: screenHeight,
+                        ),
+                      ),
+                      SizedBox(width: 12),
                       // Card Distância
                       Expanded(
                         child: _buildStatCard(
                           title: 'Distância',
                           value: _dailyDistance,
                           subtitle: 'metros',
-                          icon: Icons.directions_walk,
+                          icon: Icons.location_on,
                           color: Color.fromARGB(255, 226, 21, 65),
+                          screenHeight: screenHeight,
+                        ),
+                      ),
+                    ],
+                  ),
+
+              SizedBox(height: 12),
+
+              Row(
+                    children: [
+                      // Card Média
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Média',
+                          value: _mediaPassos,
+                          subtitle: 'passos/hora',
+                          icon: Icons.analytics_outlined,
+                          color: Colors.blue,
                           screenHeight: screenHeight,
                         ),
                       ),
