@@ -43,9 +43,13 @@ class _PedometerTelaState extends State<PedometerTela> {
     repository.calcRitmo(event);
     repository.agrupaHora(event);
 
+     int totalPassos = repository.atividadesHoje.fold(0, (sum, atividade) => sum + atividade.passos);
+
+
     setState(() {
-      _dailySteps = event.steps.toString();
-      double distance = event.steps.toDouble() * (1.7 * 0.415);
+      //_dailySteps = event.steps.toString();
+      _dailySteps = totalPassos.toString();
+      double distance = totalPassos * (1.7 * 0.415);
       _dailyDistance = distance.toInt().toString();
     });
   }

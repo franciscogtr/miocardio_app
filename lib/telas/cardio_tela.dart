@@ -5,6 +5,8 @@ import 'package:miocardio_app/telas/instrucoes_tela.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:miocardio_app/packages/heart_bpm.dart';
 import 'package:provider/provider.dart';
+import 'package:miocardio_app/bargraph/bpm_graph.dart';
+
 
 class CardioTela extends StatefulWidget {
   const CardioTela({super.key});
@@ -109,13 +111,11 @@ class _CardioTelaState extends State<CardioTela> {
             horizontal: screenWidth * 0.04,
             vertical: screenHeight * 0.02,
           ),
-          // ✅ SOLUÇÃO: Remover mainAxisAlignment.spaceEvenly
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Instruction section
               if (!isMeasuring && finalBpm == null) ...[
-                SizedBox(height: screenHeight * 0.01),
 
                 /*IconButton(
                   icon: Icon(Icons.bug_report, color: Colors.orange),
@@ -126,180 +126,212 @@ class _CardioTelaState extends State<CardioTela> {
                     );
                   },
                 ),*/
-
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => InstrucoesTela()),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.06,
-                      vertical: screenHeight * 0.02,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: Color(0xff161616),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Instruções",
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              "de aferição",
-                              style: TextStyle(fontSize: 16),
-                            ),
-                          ],
+                        Text(
+                          'Monitoramento',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        Image.asset(
-                          'assets/images/coracao.png',
-                          height: screenHeight * 0.08,
-                          fit: BoxFit.contain,
+                        SizedBox(height: 4),
+                        Text(
+                          'Cardíaco',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
                         ),
                       ],
                     ),
-                  ),
+                    // Botão de instruções
+                    IconButton(
+                      icon: Icon(Icons.info_outline, size: 28),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => InstrucoesTela()),
+                        );
+                      },
+                    ),
+                  ],
                 ),
 
-                SizedBox(height: screenHeight * 0.02),
+                SizedBox(height: screenHeight * 0.03),
 
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: screenWidth * 0.06,
-                    vertical: screenHeight * 0.02,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: Color(0xff161616),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                // ✅ Cards de estatísticas (igual à AtividadeTela)
+                if (!isMeasuring && finalBpm == null) ...[
+                  Row(
                     children: [
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Ultima aferição",
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  medition,
-                                  style: TextStyle(
-                                    fontSize: screenWidth * 0.1,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(width: 10),
-                                Text("bpm", style: TextStyle(fontSize: 15)),
-                              ],
-                            ),
-                          ],
+                        child: _buildStatCard(
+                          title: 'Última Aferição',
+                          value: medition,
+                          subtitle: 'bpm',
+                          icon: Icons.favorite,
+                          color: Color.fromARGB(255, 226, 21, 65),
+                          screenHeight: screenHeight,
                         ),
                       ),
-                      Image.asset(
-                        'assets/images/lastmedition.png',
-                        height: screenHeight * 0.06,
-                        fit: BoxFit.contain,
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Status',
+                          value: _getBpmCategoryShort(int.tryParse(medition) ?? 0),
+                          subtitle: 'cardíaco',
+                          icon: Icons.monitor_heart,
+                          color: _getBpmCategoryColor(int.tryParse(medition) ?? 0),
+                          screenHeight: screenHeight,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  SizedBox(height: screenHeight * 0.03),
+
+                  // ✅ Botões de ação em cards
+                  _buildActionCard(
+                    title: 'Medição por',
+                    subtitle: 'Câmera',
+                    icon: Icons.camera_alt,
+                    color: Color.fromARGB(255, 226, 21, 65),
+                    onTap: startMeasurement,
+                    screenHeight: screenHeight,
+                    screenWidth: screenWidth,
+                  ),
+
+                  SizedBox(height: screenHeight * 0.015),
+
+                  _buildActionCard(
+                    title: 'Inserir medição',
+                    subtitle: 'Manual',
+                    icon: Icons.edit,
+                    color: Colors.blue,
+                    onTap: updateAfericoes,
+                    screenHeight: screenHeight,
+                    screenWidth: screenWidth,
+                  ),
+                ],
+
+                SizedBox(height: screenHeight * 0.03),
+
+          // ✅ Título do gráfico de BPM
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.favorite,
+                        color: Color.fromARGB(255, 226, 21, 65),
+                        size: screenWidth * 0.06,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        "Aferições hoje",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
                 ),
 
-                SizedBox(height: screenHeight * 0.02),
-
-                GestureDetector(
-                  onTap: updateAfericoes,
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(
-                      horizontal: screenWidth * 0.06,
-                      vertical: screenHeight * 0.02,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: Color(0xff161616),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Medição por",
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            Text(
-                              "Aparelho",
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Image.asset(
-                          'assets/images/oximeter.png',
-                          height: screenHeight * 0.1,
-                          fit: BoxFit.contain,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
                 SizedBox(height: screenHeight * 0.03),
 
-                GestureDetector(
-                  onTap: startMeasurement,
-                  child: Container(
-                    width: screenWidth * 0.5,
-                    height: screenWidth * 0.5,
-                    decoration: BoxDecoration(
-                      color: Color(0xff161616),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/images/btnAferir.png',
-                          height: screenWidth * 0.15,
-                          fit: BoxFit.contain,
+// ✅ Cards de estatísticas de BPM
+                Consumer<cardioRepository>(
+                  builder: (context, cardioRepo, child) {
+                    if (cardioRepo.afericoesHoje.isEmpty) {
+                      return Container(
+                        height: screenHeight * 0.15,
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Color(0xff161616),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        SizedBox(height: 10),
-                        Text(
-                          "Começar",
-                          style: TextStyle(
-                            fontSize: 25,
-                            fontWeight: FontWeight.bold,
+                        child: Center(
+                          child: Text(
+                            'Nenhuma aferição hoje',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      );
+                    }
+
+                    int menorBpm = cardioRepo.afericoesHoje
+                        .map((a) => a.bpm)
+                        .reduce((a, b) => a < b ? a : b);
+
+                    int maiorBpm = cardioRepo.afericoesHoje
+                        .map((a) => a.bpm)
+                        .reduce((a,b) => a > b ? a : b);
+
+                    double medioBpm = cardioRepo.afericoesHoje
+                        .map((a) => a.bpm)
+                        .reduce((a, b) => a + b) / cardioRepo.afericoesHoje.length;
+
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Menor',
+                            value: menorBpm.toString(),
+                            subtitle: 'bpm',
+                            icon: Icons.arrow_downward,
+                            color: Colors.blue,
+                            screenHeight: screenHeight,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Médio',
+                            value: medioBpm.toInt().toString(),
+                            subtitle: 'bpm',
+                            icon: Icons.favorite,
+                            color: Colors.green,
+                            screenHeight: screenHeight,
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard(
+                            title: 'Maior',
+                            value: maiorBpm.toString(),
+                            subtitle: 'bpm',
+                            icon: Icons.arrow_upward,
+                            color: Color.fromARGB(255, 226, 21, 65),
+                            screenHeight: screenHeight,
                           ),
                         ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
 
-                SizedBox(height: screenHeight * 0.02),
+
+                SizedBox(height: screenHeight * 0.015),
+
+
+// ✅ Gráfico de BPM
+                Container(
+                  height: screenHeight * 0.35,
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Color(0xff161616),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: BpmLineGraph(),
+                ),
+
+
               ],
 
               // Display section
@@ -457,6 +489,126 @@ class _CardioTelaState extends State<CardioTela> {
   }
 }
 
+// ✅ Widget de card de estatística (igual à AtividadeTela)
+Widget _buildStatCard({
+  required String title,
+  required String value,
+  required String subtitle,
+  required IconData icon,
+  required Color color,
+  required double screenHeight,
+}) {
+  return Container(
+    padding: EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Color(0xff161616),
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+            Icon(icon, color: color, size: 20),
+          ],
+        ),
+        SizedBox(height: 12),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+// ✅ Widget de card de ação
+Widget _buildActionCard({
+  required String title,
+  required String subtitle,
+  required IconData icon,
+  required Color color,
+  required VoidCallback onTap,
+  required double screenHeight,
+  required double screenWidth,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Color(0xff161616),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 32,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios,
+            color: Colors.grey,
+            size: 20,
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+
 // Helper methods
 String _getBpmCategory(int bpm) {
   if (bpm < 60) return "Bradicardia (Baixo)";
@@ -465,9 +617,16 @@ String _getBpmCategory(int bpm) {
   return "Taquicardia (Elevado)";
 }
 
+String _getBpmCategoryShort(int bpm) {
+  if (bpm < 60) return "Baixo";
+  if (bpm <= 100) return "Normal";
+  if (bpm <= 120) return "Elevado";
+  return "Muito Alto";
+}
+
 Color _getBpmCategoryColor(int bpm) {
   if (bpm < 60) return Colors.blue;
   if (bpm <= 100) return Colors.green;
-  if (bpm <= 120) return Colors.red;
-  return const Color.fromARGB(255, 255, 17, 0);
+  if (bpm <= 120) return Colors.orange;
+  return Color.fromARGB(255, 226, 21, 65);
 }

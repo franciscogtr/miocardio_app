@@ -154,6 +154,37 @@ class InstrucoesTela extends StatelessWidget {
                   ],
                 ),
               ),
+
+              SizedBox(height: 10),
+
+              Card(
+                color: Color(0xff161616),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    ListTile(
+                      leading: Icon(
+                        Icons.looks_5_rounded,
+                        color: Color.fromARGB(255, 226, 21, 65),
+                      ),
+                      title: Text(
+                        "Pressione levemente",
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        "Uma leve pressão melhora a identificação da pulsação",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -146,30 +146,31 @@ class pedometerRepository extends ChangeNotifier {
   // ✅ Busca passos totais acumulados até determinada hora
   Future<int> _buscarPassosTotaisAteHora(DateTime dataHora) async {
     try {
-      db = await DB.instance.database;
+      final db = await DB.instance.database;
 
-      DateTime inicioDoDia = DateTime(dataHora.year, dataHora.month, dataHora.day);
-      DateTime inicioProximaHora = DateTime(
-          dataHora.year,
-          dataHora.month,
-          dataHora.day,
-          dataHora.hour
-      );
+      // Cria as datas de início e fim do dia atual até a hora anterior
+      DateTime inicioDia = DateTime(dataHora.year, dataHora.month, dataHora.day, 0, 0, 0);
+      DateTime fimHoraAnterior = DateTime(dataHora.year, dataHora.month, dataHora.day, dataHora.hour, 0, 0);
 
-      final List<Map<String, dynamic>> resultado = await db.query(
-        'historicoAtividade',
-        where: 'data >= ? AND data < ?',
-        whereArgs: [inicioDoDia.toIso8601String(), inicioProximaHora.toIso8601String()],
-        orderBy: 'data DESC',
-        limit: 1,
-      );
+      // Busca TODOS os registros do mesmo dia até a hora anterior
+      final resultado = await db.rawQuery('''
+      SELECT SUM(passos) as total
+      FROM historicoAtividade
+      WHERE data >= ? 
+        AND data < ?
+    ''', [
+        inicioDia.toIso8601String(),
+        fimHoraAnterior.toIso8601String()
+      ]);
 
-      if (resultado.isNotEmpty) {
-        return resultado.first['passos'] as int;
-      }
-      return 0;
+      int total = resultado.first['total'] as int? ?? 0;
+
+      print("   🔍 Total de passos até ${dataHora.hour}h: $total");
+
+      return total;
+
     } catch (e) {
-      print("❌ Erro ao buscar passos até hora: $e");
+      print("❌ Erro ao buscar passos totais até hora: $e");
       return 0;
     }
   }
@@ -237,34 +238,47 @@ class pedometerRepository extends ChangeNotifier {
           anoEvento
       );
 
+      // ✅ Busca passos totais do BD até ANTES da hora atual
+      int passosAteHoraAnterior = await _buscarPassosTotaisAteHora(event.timeStamp);
+
+      // ✅ Calcula passos nesta hora (sensor total - passos já contabilizados)
+      int passosNestaHora = event.steps - passosAteHoraAnterior;
+
+      // ✅ Garante que não seja negativo (proteção)
+      if (passosNestaHora < 0) {
+        print("⚠️ Passos negativos detectados! Resetando para 0");
+        passosNestaHora = 0;
+      }
+
       if (registroExistente != null) {
         int idExistente = registroExistente['id'] as int;
-        int passosAteHoraAnterior = await _buscarPassosTotaisAteHora(event.timeStamp);
-        int passosNestaHora = event.steps - passosAteHoraAnterior;
 
         print("   📌 Registro encontrado - ID: $idExistente");
         print("   📊 Passos até hora anterior: $passosAteHoraAnterior");
         print("   ➕ Passos nesta hora: $passosNestaHora");
 
-        await _atualizarRegistro(idExistente, passosNestaHora, event.timeStamp);
+        // ✅ IMPORTANTE: Só atualiza se houver mudança
+        int passosAtuais = registroExistente['passos'] as int? ?? 0;
+        if (passosNestaHora != passosAtuais) {
+          await _atualizarRegistro(idExistente, passosNestaHora, event.timeStamp);
+        }
 
         _horaAtual = horaEvento;
         _idRegistroAtual = idExistente;
 
       } else {
-        int passosAteHoraAnterior = await _buscarPassosTotaisAteHora(event.timeStamp);
-        int passosNestaHora = event.steps - passosAteHoraAnterior;
-
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         print("🆕 NOVA HORA: ${horaEvento}h");
         print("   📊 Passos até hora anterior: $passosAteHoraAnterior");
         print("   ➕ Passos nesta hora: $passosNestaHora");
         print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-        int novoId = await _inserirRegistro(passosNestaHora, event.timeStamp);
-
-        _horaAtual = horaEvento;
-        _idRegistroAtual = novoId;
+        // ✅ Só insere se houver passos nesta hora
+        if (passosNestaHora > 0) {
+          int novoId = await _inserirRegistro(passosNestaHora, event.timeStamp);
+          _horaAtual = horaEvento;
+          _idRegistroAtual = novoId;
+        }
       }
 
     } catch (e) {
@@ -272,7 +286,6 @@ class pedometerRepository extends ChangeNotifier {
       print("   Stack: ${StackTrace.current}");
     }
   }
-
   // ✅ Calcula ritmo
   void calcRitmo(StepCount event) {
     try {
@@ -286,33 +299,38 @@ class pedometerRepository extends ChangeNotifier {
       if (first.timeStamp.hour == last.timeStamp.hour) {
         if (last.timeStamp.minute == first.timeStamp.minute) {
           tempo = first.timeStamp.second;
+          print("Passou $tempo segundos");
         } else {
           tInicial = last.timeStamp.minute.toInt();
           tFinal = first.timeStamp.minute.toInt();
           tempo = (tFinal - tInicial) * 60;
+          print("Passou $tempo segundos");
         }
       } else {
         tInicial = 60 - last.timeStamp.minute.toInt();
         tFinal = first.timeStamp.minute.toInt();
         tempo = (tFinal + tInicial) * 60;
+        print("Passou $tempo segundos");
       }
 
-      if (tempo <= 600) {
+      if (tempo <= 300) {
         int passosInicio = last.steps.toInt();
         int passosFim = first.steps.toInt();
         double pace = (passosFim - passosInicio) / tempo;
 
         String novoRitmo;
-        if (pace <= 80 / 60) {
+        if (pace < 1800 / 3600) {
           novoRitmo = 'Leve';
-        } else if (pace > 80 / 60 && pace <= 110 / 60) {
+        } else if (pace >= 1800 / 3600 && pace <= 3600 / 3600) {
           novoRitmo = 'Moderado';
         } else {
           novoRitmo = 'Intenso';
         }
-
+        print(("❌ Pace atual: $pace"));
+        print(("❌ Ritmo atual: $ritmoAtual"));
         if (ritmoAtual != novoRitmo) {
           ritmoAtual = novoRitmo;
+          print(("❌ Ritmo atual: $ritmoAtual"));
           notifyListeners();
         }
       } else {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:miocardio_app/telas/atividade_tela.dart';
 import 'package:miocardio_app/telas/cardio_tela.dart';
 import 'package:miocardio_app/telas/metricas_tela.dart';
 import 'package:miocardio_app/telas/pedometer_tela.dart';
@@ -47,7 +48,7 @@ class _TelaPrincipalState extends State<TelaPrincipal> {
         controller: controller,
         children: const [
            CardioTela(),
-           PedometerTela(),
+           AtividadeTela(),
            MetricasTela(),
         ],
       ),
